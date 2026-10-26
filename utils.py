@@ -273,7 +273,7 @@ def getTargetSegmentation(batch):
     # BraTS, input (label) is already discrete values : 0, 1, 2 and 3
     # spineLabel = 1.0
     spineLabel = 1.0
-    return (batch / spineLabel).round().long().squeeze()
+    return (batch / spineLabel).round().long()
 
 
 from scipy import ndimage

@@ -1,0 +1,10 @@
+-r requirements-core.txt
+torchvision==0.23.0
+pandas==2.2.3
+scipy==1.13.1
+scikit-learn==1.6.1
+scikit-image==0.24.0
+nibabel==5.3.2
+SimpleITK==2.5.3
+MedPy==0.5.2
+Pillow==11.3.0

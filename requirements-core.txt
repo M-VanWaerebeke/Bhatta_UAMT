@@ -1,0 +1,3 @@
+# Verified on Python 3.9.6, CPU.
+torch==2.8.0
+numpy==2.0.2

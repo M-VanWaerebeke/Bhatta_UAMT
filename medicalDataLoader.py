@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import os
+import ast
 from random import shuffle
 from pandas.core.algorithms import isin
 import torch
@@ -122,7 +123,7 @@ def make_3Ddataset(
             os.path.join(root_dir, it_im),
             os.path.join(root_dir, it_mk),
             os.path.join(root_dir, it_gt),
-            eval(it_patch),
+            ast.literal_eval(it_patch),
             it_nm,
         )
         items.append(item)
@@ -149,7 +150,7 @@ def normalize_intensity(
     elif normalization == "max":
         # max_val, _ = torch.max(img_tensor)
         # img_tensor = img_tensor / max_val
-        img_tensor = img_tensor / img_tensor()
+        img_tensor = img_tensor / img_tensor.max().clamp(min=1e-10)
     elif normalization == "brats":
         # print(norm_values)
         normalized_tensor = (img_tensor.clone() - norm_values[0]) / norm_values[1]

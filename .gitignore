@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv*/
+.pytest_cache/
+results/
+Results*/
+data/
+*.pkl
+*.pth
+*.nii
+*.nii.gz

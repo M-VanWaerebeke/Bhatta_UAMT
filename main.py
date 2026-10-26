@@ -50,6 +50,7 @@ def runTraining(
     root_dir="../../../../home/ar94660/UNet3D_DHCP",
     main_path="Results-partial-T2/Statistics/",
     model_dir="Results-partial-T2/model/",
+    num_workers=0,
 ):
     """This function creates and trains the model from all the required parameters and paths.
 
@@ -79,11 +80,12 @@ def runTraining(
         root_dir (str, optional): Path towards the images. Defaults to "../../../../home/ar94660/UNet3D_DHCP".
         mainPath (str, optional): Path to save statistics and others to.. Defaults to "Results-partial-T2/Statistics/".
         model_dir (str, optional): Path to save the model to. Defaults to "Results-partial-T2/model/".
+        num_workers (int): DataLoader worker processes; zero keeps CPU examples portable.
     """
 
     modelName = f"{method}-{labelled_samples}_labels-{epoch}_epoch_" + str(uncert)
     print(f"Training model {modelName}")
-    main_path = os.path.join(main_path, "modelName")
+    main_path = os.path.join(main_path, modelName)
 
     P = (  # parameters
         labelled_samples,
@@ -108,7 +110,6 @@ def runTraining(
         num_classes,
     )
 
-    seed = 42
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -128,7 +129,7 @@ def runTraining(
     train_loader = DataLoader(
         train_set,
         batch_size=min(batch_size, len(train_set)),
-        num_workers=8,
+        num_workers=num_workers,
         shuffle=True,
     )
 
@@ -146,7 +147,7 @@ def runTraining(
     unlabelled_train_loader = DataLoader(
         unlabelled_train_set,
         batch_size=min(batch_size_unlabelled, len(unlabelled_train_set)),
-        num_workers=8,
+        num_workers=num_workers,
         shuffle=True,
     )
 
@@ -162,7 +163,7 @@ def runTraining(
     val_loader = DataLoader(
         val_set,
         batch_size=min(batch_size_val, len(val_set)),
-        num_workers=8,
+        num_workers=num_workers,
         shuffle=False,
     )
 
@@ -196,7 +197,7 @@ def runTraining(
     for param in netT.parameters():
         param.detach_()
 
-    softMax = nn.Softmax()
+    softMax = nn.Softmax(dim=1)
     CE_loss = nn.CrossEntropyLoss()
     Dice_loss = DiceLoss(normalization="none")
 
@@ -250,9 +251,6 @@ def runTraining(
 
             batch_num = i * (labelled_batches + unlabelled_batches) + j
             image, mask, labels, img_names = data[:4]
-
-            if image.size(0) != batch_size:
-                continue  # prevent batchnorm error for batch of size 1
 
             netG.train()
             optimizerG.zero_grad()
@@ -326,7 +324,7 @@ def runTraining(
                 if uncert == "bhatta":
                     uncertainty = bhatta_tensor(preds)
                 elif uncert == None or uncert == "None":
-                    uncertainty = torch.zeros(preds.shape[1:])
+                    uncertainty = torch.zeros(preds.shape[1:], device=preds.device)
                 elif uncert == "UAMT":
                     preds = torch.mean(preds, dim=0)
                     uncertainty = (
@@ -426,10 +424,6 @@ def runTraining(
                 )
                 image, mask, _, img_names = data[:4]
 
-                # prevent batchnorm error for batch of size 1
-                if image.size(0) != batch_size:
-                    continue
-
                 netG.train()
                 optimizerG.zero_grad()
                 MRI = to_var(image)
@@ -454,8 +448,9 @@ def runTraining(
                 volume_batch_r = MRI.repeat(2, 1, 1, 1, 1)
                 stride = volume_batch_r.shape[0] // 2
                 preds = torch.zeros(
-                    [stride * T, num_classes, x_patch, y_patch, z_patch]
-                ).cuda()
+                    [stride * T, num_classes, x_patch, y_patch, z_patch],
+                    device=ema_inputs.device,
+                )
                 for k in range(T // 2):
                     ema_inputs = volume_batch_r + torch.clamp(
                         torch.randn_like(volume_batch_r) * 0.1, -0.2, 0.2
@@ -488,7 +483,7 @@ def runTraining(
                         / log(num_classes)
                     )
                 elif uncert == None or uncert == "None":
-                    uncertainty = torch.zeros(preds.shape[1:], device="cuda")
+                    uncertainty = torch.zeros(preds.shape[1:], device=preds.device)
                 elif uncert == "new_bhatta":
                     uncertainty = new_bhatta_tensor(preds)
                 elif uncert[:3] == "div":
@@ -550,7 +545,10 @@ def runTraining(
                     suffix=" loss_unsup: {:.4f}".format(global_loss),
                 )
 
-        directory = mainPath
+        Losses_total.append(float(np.mean(loss_total)))
+        Losses_CE.append(float(np.mean(loss_CE)))
+        Losses_Dice.append(float(np.mean(loss_Dice)))
+        directory = main_path
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -563,10 +561,6 @@ def runTraining(
         loss_val_CE = []
         for j, data in enumerate(val_loader):
             image, labels = data[0], data[2]
-            if image.shape[0] != batch_size_val:
-                print("SKETCHY PATCH, IGNORING IT")  # sanity check
-                continue
-
             netG.eval()
             optimizerG.zero_grad()
             MRI = to_var(image)
@@ -673,8 +667,27 @@ def update_ema_variables(model, ema_model, global_step, ema_decay=0.99):
     """
     ema_decay = min(1 - 1 / (global_step + 1), ema_decay)
     for ema_param, param in zip(ema_model.parameters(), model.parameters()):
-        ema_param.data.mul_(ema_decay).add_(1 - ema_decay, param.data)
+        ema_param.data.mul_(ema_decay).add_(param.data, alpha=1 - ema_decay)
 
 
 if __name__ == "__main__":
-    runTraining()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Train the historical 3D U-Net research model")
+    parser.add_argument("--root-dir", required=True, help="Prepared volumes and split CSVs")
+    parser.add_argument("--main-path", default="results/statistics")
+    parser.add_argument("--model-dir", default="results/models")
+    parser.add_argument("--epoch", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--labelled-samples", type=int, default=3)
+    parser.add_argument("--val-samples", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=6)
+    parser.add_argument("--patch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=0)
+    args = parser.parse_args()
+    runTraining(root_dir=args.root_dir, main_path=args.main_path, model_dir=args.model_dir,
+                epoch=args.epoch, seed=args.seed, labelled_samples=args.labelled_samples,
+                val_samples=args.val_samples, batch_size=args.batch_size,
+                batch_size_val=args.batch_size, batch_size_unlabelled=args.batch_size,
+                x_patch=args.patch_size, y_patch=args.patch_size, z_patch=args.patch_size,
+                num_workers=args.num_workers)

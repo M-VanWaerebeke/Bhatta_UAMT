@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "Please cite the paper when using this research software."
+type: software
+title: "Bhattacharyya uncertainty for multi-class semi-supervised segmentation"
+authors:
+  - family-names: Van Waerebeke
+    given-names: Martin
+  - family-names: Lodygensky
+    given-names: Gregory
+  - family-names: Dolz
+    given-names: Jose
+repository-code: "https://github.com/M-VanWaerebeke/Bhatta_UAMT"
+url: "https://arxiv.org/abs/2203.03587"
+preferred-citation:
+  type: article
+  title: "On the pitfalls of entropy-based uncertainty for multi-class semi-supervised segmentation"
+  authors:
+    - family-names: Van Waerebeke
+      given-names: Martin
+    - family-names: Lodygensky
+      given-names: Gregory
+    - family-names: Dolz
+      given-names: Jose
+  year: 2022
+  url: "https://arxiv.org/abs/2203.03587"
